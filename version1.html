@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PowerView — Hybrid Energy Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b1220;
+    --bg-elev: #121b2e;
+    --bg-elev-2: #17223a;
+    --border: #223154;
+    --text: #eef2f8;
+    --text-dim: #8b96ad;
+    --text-faint: #5b6884;
+
+    --solar: #f5b942;
+    --solar-bg: rgba(245, 185, 66, 0.12);
+    --wind: #3ecfd6;
+    --wind-bg: rgba(62, 207, 214, 0.12);
+    --batt: #4ad991;
+    --batt-bg: rgba(74, 217, 145, 0.12);
+    --load: #f2794a;
+    --load-bg: rgba(242, 121, 74, 0.12);
+    --accent: #6a8dff;
+    --accent-bg: rgba(106, 141, 255, 0.14);
+    --warn: #f0a63a;
+
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+    --nav-size: 76px;
+    --shadow: 0 12px 30px -14px rgba(0,0,0,0.55);
+  }
+
+  html[data-theme="light"] {
+    --bg: #f3f5fa;
+    --bg-elev: #ffffff;
+    --bg-elev-2: #eef1f8;
+    --border: #dde3ef;
+    --text: #131a2a;
+    --text-dim: #5c667c;
+    --text-faint: #94a0b8;
+    --shadow: 0 12px 30px -18px rgba(20,30,60,0.25);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.25s ease, color 0.25s ease;
+  }
+  .num, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  button { font-family: inherit; }
+  ::selection { background: var(--accent-bg); color: var(--text); }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  }
+
+  .app { display: grid; grid-template-columns: var(--nav-size) 1fr; min-height: 100vh; }
+
+  nav.rail {
+    grid-column: 1;
+    background: var(--bg-elev);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 18px 0; gap: 4px;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .brand {
+    width: 40px; height: 40px; border-radius: 11px;
+    background: linear-gradient(155deg, var(--solar), var(--wind) 55%, var(--batt));
+    margin-bottom: 22px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .brand svg { width: 20px; height: 20px; stroke: #0b1220; }
+
+  .navbtn {
+    width: 52px; height: 52px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: none; border-radius: var(--radius-sm);
+    color: var(--text-faint);
+    cursor: pointer; position: relative;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+  .navbtn svg { width: 21px; height: 21px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .navbtn:hover { color: var(--text-dim); background: var(--bg-elev-2); }
+  .navbtn.active { color: var(--accent); background: var(--accent-bg); }
+  .navbtn.active::before {
+    content: ""; position: absolute; left: -10px; top: 14px; bottom: 14px; width: 3px;
+    background: var(--accent); border-radius: 2px;
+  }
+  .navbtn .tip {
+    position: absolute; left: 64px; top: 50%; transform: translateY(-50%);
+    background: var(--bg-elev-2); color: var(--text); padding: 5px 10px;
+    border-radius: 6px; font-size: 12px; white-space: nowrap;
+    opacity: 0; pointer-events: none; transition: opacity 0.12s ease;
+    border: 1px solid var(--border); z-index: 20;
+  }
+  .navbtn:hover .tip { opacity: 1; }
+
+  .rail-spacer { flex: 1; }
+  .theme-toggle {
+    width: 52px; height: 30px; border-radius: 15px;
+    background: var(--bg-elev-2); border: 1px solid var(--border);
+    position: relative; cursor: pointer; margin-bottom: 10px; flex-shrink: 0;
+  }
+  .theme-toggle::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 24px; height: 24px;
+    border-radius: 50%; background: var(--accent);
+    transition: transform 0.2s ease;
+  }
+  html[data-theme="light"] .theme-toggle::after { transform: translateX(22px); }
+
+  main { grid-column: 2; padding: 22px 28px 100px; max-width: 1180px; }
+
+  .topbar {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 22px; flex-wrap: wrap; gap: 10px;
+  }
+  .topbar h1 { font-size: 22px; margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+  .topbar .sub { color: var(--text-dim); font-size: 13.5px; margin-top: 3px; }
+  .status-cluster { display: flex; align-items: center; gap: 16px; font-size: 12.5px; color: var(--text-dim); }
+  .status-cluster .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--batt); display: inline-block; margin-right: 6px; box-shadow: 0 0 0 3px var(--batt-bg); }
+  .status-cluster .dot.offline { background: var(--warn); box-shadow: 0 0 0 3px rgba(240,166,58,0.18); }
+  .clock { font-family: "IBM Plex Mono", monospace; color: var(--text); }
+
+  .page { display: none; animation: fadein 0.25s ease; }
+  .page.active { display: block; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  h2.section-title { font-size: 15px; font-weight: 600; margin: 28px 0 12px; color: var(--text-dim); }
+  h2.section-title:first-child { margin-top: 0; }
+
+  .card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 18px;
+  }
+  .card-label { font-size: 12.5px; color: var(--text-dim); margin: 0 0 8px; }
+  .card-value { font-size: 26px; font-weight: 600; }
+  .card-unit { font-size: 13px; color: var(--text-dim); font-weight: 400; margin-left: 3px; }
+
+  .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+  .bento .hero { grid-column: span 6; }
+  .bento .tile-soc { grid-column: span 2; }
+  .bento .tile-pv { grid-column: span 2; }
+  .bento .tile-wt { grid-column: span 2; }
+  .bento .tile-load { grid-column: span 3; }
+  .bento .tile-trend { grid-column: span 3; }
+
+  @media (max-width: 720px) {
+    .bento .tile-soc, .bento .tile-pv, .bento .tile-wt,
+    .bento .tile-load, .bento .tile-trend { grid-column: span 6; }
+  }
+
+  .hero {
+    background: radial-gradient(ellipse at top left, var(--bg-elev-2), var(--bg-elev) 60%);
+    position: relative; overflow: hidden; padding: 22px;
+  }
+  .hero-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; flex-wrap: wrap; gap: 8px; }
+  .hero-head .card-label { margin: 0; }
+  .hero-net { font-size: 13px; }
+  .hero-net .num { font-weight: 600; }
+  .flow-wrap { width: 100%; }
+  .flow-wrap svg { width: 100%; height: auto; display: block; }
+  .flow-node-label { font-family: "IBM Plex Sans", sans-serif; font-size: 11px; }
+  .flow-node-value { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; }
+
+  .soc-ring { display: flex; align-items: center; gap: 14px; }
+  .ring { position: relative; width: 74px; height: 74px; flex-shrink: 0; }
+  .ring svg { transform: rotate(-90deg); width: 74px; height: 74px; }
+  .ring .ring-bg { fill: none; stroke: var(--border); stroke-width: 8; }
+  .ring .ring-fg { fill: none; stroke: var(--batt); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
+  .ring .ring-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; }
+
+  .trend-mini svg { width: 100%; height: 64px; display: block; margin-top: 6px; }
+
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+  .pill.batt { background: var(--batt-bg); color: var(--batt); }
+  .pill.warn { background: rgba(240,166,58,0.14); color: var(--warn); }
+  .pill.accent { background: var(--accent-bg); color: var(--accent); }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 720px) { .row2, .row3 { grid-template-columns: 1fr; } }
+
+  .stat-line { display: flex; justify-content: space-between; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .stat-line:last-child { border-bottom: none; }
+  .stat-line .k { color: var(--text-dim); font-size: 13px; }
+  .stat-line .v { font-size: 15px; font-weight: 600; }
+
+  .source-card .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 8px; margin-bottom: 12px; }
+  .source-card.solar .chip { background: var(--solar-bg); color: var(--solar); }
+  .source-card.wind .chip { background: var(--wind-bg); color: var(--wind); }
+  .source-card .big { font-size: 30px; font-weight: 600; margin: 2px 0 14px; }
+
+  .tabs { display: inline-flex; background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; }
+  .tabs button {
+    border: none; background: transparent; color: var(--text-dim);
+    padding: 7px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 500; cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .tabs button.active { background: var(--bg-elev); color: var(--text); box-shadow: var(--shadow); }
+
+  .hist-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .hist-chart-wrap svg { width: 100%; height: 260px; display: block; }
+  .hist-chart-wrap { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px; }
+
+  .gauge-big { width: 168px; height: 168px; margin: 6px auto 10px; position: relative; }
+  .gauge-big svg { width: 168px; height: 168px; transform: rotate(-90deg); }
+  .gauge-big .ring-bg { fill: none; stroke: var(--border); stroke-width: 12; }
+  .gauge-big .ring-fg { fill: none; stroke: var(--batt); stroke-width: 12; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
+  .gauge-big .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .gauge-big .center .pct { font-size: 32px; font-weight: 700; }
+  .gauge-big .center .lbl { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); gap: 14px; flex-wrap: wrap; }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row .k { font-size: 14px; font-weight: 500; }
+  .settings-row .d { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
+  .btn {
+    border: 1px solid var(--border); background: var(--bg-elev-2); color: var(--text);
+    padding: 8px 16px; border-radius: 9px; font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #0b1220; border-color: var(--accent); font-weight: 600; }
+  .switch { width: 42px; height: 24px; border-radius: 12px; background: var(--bg-elev-2); border: 1px solid var(--border); position: relative; cursor: pointer; flex-shrink: 0; }
+  .switch.on { background: var(--batt-bg); border-color: var(--batt); }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--text-faint); transition: transform 0.15s ease, background 0.15s ease; }
+  .switch.on::after { transform: translateX(18px); background: var(--batt); }
+  select.field, input.field {
+    background: var(--bg-elev-2); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 10px; border-radius: 8px; font-size: 13px; font-family: inherit;
+  }
+
+  .footnote { color: var(--text-faint); font-size: 12px; margin-top: 30px; line-height: 1.6; }
+
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; }
+    nav.rail {
+      position: fixed; bottom: 0; left: 0; right: 0; top: auto; height: 64px;
+      flex-direction: row; justify-content: space-around; padding: 6px 4px;
+      border-right: none; border-top: 1px solid var(--border);
+      z-index: 30;
+    }
+    .brand, .rail-spacer, .theme-toggle { display: none; }
+    .navbtn { width: auto; flex: 1; height: 52px; }
+    .navbtn .tip { display: none; }
+    main { grid-column: 1; padding: 16px 14px 86px; }
+    .topbar { position: sticky; top: 0; background: var(--bg); z-index: 10; padding-top: 4px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <nav class="rail" id="rail">
+    <div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg></div>
+
+    <button class="navbtn" data-page="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg><span class="tip">Dashboard</span></button>
+    <button class="navbtn" data-page="flow"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 12a8 8 0 0 1 14-5.3L20 8"/><path d="M20 4v4h-4"/><path d="M20 12a8 8 0 0 1-14 5.3L4 16"/><path d="M4 20v-4h4"/></svg><span class="tip">Power Flow</span></button>
+    <button class="navbtn" data-page="sources"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg><span class="tip">Sources</span></button>
+    <button class="navbtn" data-page="battery"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><path d="M6 10v4"/><path d="M10 10v4"/></svg><span class="tip">Battery</span></button>
+    <button class="navbtn" data-page="load"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M9 2v4M15 2v4"/><rect x="6" y="6" width="12" height="10" rx="2"/><path d="M12 16v6"/></svg><span class="tip">Home Load</span></button>
+    <button class="navbtn" data-page="history"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 20V10M11 20V4M18 20v-7"/></svg><span class="tip">History</span></button>
+    <button class="navbtn" data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9c.14.42.42.78.8 1.02.32.2.7.3 1.09.3H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg><span class="tip">Settings</span></button>
+
+    <div class="rail-spacer"></div>
+    <div class="theme-toggle" id="themeToggle" title="Toggle theme"></div>
+  </nav>
+
+  <main>
+    <div class="topbar">
+      <div>
+        <h1 id="pageTitle">Dashboard</h1>
+        <div class="sub" id="pageSub">Solar + wind + battery, at a glance</div>
+      </div>
+      <div class="status-cluster">
+        <span class="clock" id="clock">--:--</span>
+        <span><span class="dot" id="linkDot"></span><span id="linkLabel">Connecting…</span></span>
+        <span id="syncStatus">Waiting for data</span>
+      </div>
+    </div>
+
+    <!-- ============================================================ DASHBOARD -->
+    <section class="page active" data-page="dashboard">
+      <div class="bento">
+        <div class="card hero">
+          <div class="hero-head">
+            <p class="card-label">Live power flow</p>
+            <div class="hero-net"><span class="num" id="heroNet">+0 W</span> to battery</div>
+          </div>
+          <div class="flow-wrap">
+            <svg viewBox="0 0 640 180" id="flowSvg">
+              <defs>
+                <marker id="arrowSolar" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="var(--solar)"/></marker>
+                <marker id="arrowWind" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="var(--wind)"/></marker>
+                <marker id="arrowBatt" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="var(--batt)"/></marker>
+              </defs>
+              <path id="pathPv" d="M140,44 C230,44 230,90 300,90" fill="none" stroke="var(--solar)" stroke-width="2" marker-end="url(#arrowSolar)"/>
+              <path id="pathWt" d="M140,136 C230,136 230,90 300,90" fill="none" stroke="var(--wind)" stroke-width="2" marker-end="url(#arrowWind)"/>
+              <path id="pathBatt" d="M380,90 C440,90 440,90 500,90" fill="none" stroke="var(--batt)" stroke-width="2" marker-end="url(#arrowBatt)"/>
+
+              <circle r="3.2" fill="var(--solar)"><animateMotion dur="2.6s" repeatCount="indefinite" rotate="auto"><mpath href="#pathPv"/></animateMotion></circle>
+              <circle r="3.2" fill="var(--wind)"><animateMotion dur="2.1s" repeatCount="indefinite" rotate="auto"><mpath href="#pathWt"/></animateMotion></circle>
+              <circle r="3.2" fill="var(--batt)"><animateMotion dur="1.8s" repeatCount="indefinite" rotate="auto"><mpath href="#pathBatt"/></animateMotion></circle>
+
+              <g>
+                <rect x="20" y="20" width="120" height="48" rx="10" fill="var(--bg-elev-2)" stroke="var(--solar)" stroke-width="1.2"/>
+                <text x="36" y="40" class="flow-node-label" fill="var(--solar)">Solar</text>
+                <text x="36" y="57" class="flow-node-value" fill="var(--text)" id="flowPv">0 W</text>
+              </g>
+              <g>
+                <rect x="20" y="112" width="120" height="48" rx="10" fill="var(--bg-elev-2)" stroke="var(--wind)" stroke-width="1.2"/>
+                <text x="36" y="132" class="flow-node-label" fill="var(--wind)">Wind</text>
+                <text x="36" y="149" class="flow-node-value" fill="var(--text)" id="flowWt">0 W</text>
+              </g>
+              <g>
+                <rect x="300" y="66" width="80" height="48" rx="10" fill="var(--bg-elev-2)" stroke="var(--batt)" stroke-width="1.2"/>
+                <text x="314" y="86" class="flow-node-label" fill="var(--batt)">Battery</text>
+                <text x="314" y="103" class="flow-node-value" fill="var(--text)" id="flowSoc">0%</text>
+              </g>
+              <g>
+                <rect x="500" y="66" width="120" height="48" rx="10" fill="var(--bg-elev-2)" stroke="var(--load)" stroke-width="1.2"/>
+                <text x="516" y="86" class="flow-node-label" fill="var(--load)">Home</text>
+                <text x="516" y="103" class="flow-node-value" fill="var(--text)" id="flowLoad">0 W</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        <div class="card tile-soc">
+          <p class="card-label">Battery</p>
+          <div class="soc-ring">
+            <div class="ring">
+              <svg viewBox="0 0 74 74"><circle class="ring-bg" cx="37" cy="37" r="31"/><circle class="ring-fg" id="socRing" cx="37" cy="37" r="31" stroke-dasharray="194.8" stroke-dashoffset="194.8"/></svg>
+              <div class="ring-num num" id="socNum">--%</div>
+            </div>
+            <div>
+              <div class="pill batt" id="battPill">Idle</div>
+              <div style="margin-top:8px; font-size:13px; color:var(--text-dim);"><span class="num" id="battWattMini">+0 W</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card tile-pv">
+          <p class="card-label">Solar</p>
+          <div class="card-value num" id="pvVal">0<span class="card-unit">W</span></div>
+          <div class="trend-mini"><svg viewBox="0 0 200 64" id="pvSparkline"></svg></div>
+        </div>
+
+        <div class="card tile-wt">
+          <p class="card-label">Wind</p>
+          <div class="card-value num" id="wtVal">0<span class="card-unit">W</span></div>
+          <div class="trend-mini"><svg viewBox="0 0 200 64" id="wtSparkline"></svg></div>
+        </div>
+
+        <div class="card tile-load">
+          <p class="card-label">Home load</p>
+          <div class="row2" style="gap:20px;">
+            <div>
+              <div class="card-value num" id="loadVal">0<span class="card-unit">W</span></div>
+              <div style="font-size:12.5px; color:var(--text-dim); margin-top:4px;" id="loadSourceMini">—</div>
+            </div>
+            <div class="trend-mini" style="align-self:center;"><svg viewBox="0 0 200 64" id="loadSparkline"></svg></div>
+          </div>
+        </div>
+
+        <div class="card tile-trend">
+          <p class="card-label">Today</p>
+          <div class="stat-line"><span class="k">Energy used</span><span class="v num" id="kwhToday">— kWh</span></div>
+          <div class="stat-line"><span class="k">Peak load</span><span class="v num" id="peakToday">— W</span></div>
+          <div class="stat-line"><span class="k">Cloud sync</span><span class="v" id="syncStatus2">—</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ POWER FLOW -->
+    <section class="page" data-page="flow">
+      <h2 class="section-title">System overview</h2>
+      <div class="card">
+        <p class="card-label">How power is moving right now</p>
+        <div class="flow-wrap" style="margin-top:10px;">
+          <svg viewBox="0 0 640 220">
+            <path d="M140,54 C260,54 260,110 330,110" fill="none" stroke="var(--solar)" stroke-width="2.5" marker-end="url(#arrowSolar)"/>
+            <path d="M140,166 C260,166 260,110 330,110" fill="none" stroke="var(--wind)" stroke-width="2.5" marker-end="url(#arrowWind)"/>
+            <path d="M430,110 C490,110 490,110 540,110" fill="none" stroke="var(--batt)" stroke-width="2.5" marker-end="url(#arrowBatt)"/>
+            <g><rect x="20" y="26" width="130" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--solar)" stroke-width="1.4"/>
+              <text x="38" y="50" class="flow-node-label" fill="var(--solar)" font-size="13">Solar array</text>
+              <text x="38" y="70" class="flow-node-value" fill="var(--text)" font-size="14" id="flowPv2">0 W</text></g>
+            <g><rect x="20" y="138" width="130" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--wind)" stroke-width="1.4"/>
+              <text x="38" y="162" class="flow-node-label" fill="var(--wind)" font-size="13">Wind turbine</text>
+              <text x="38" y="182" class="flow-node-value" fill="var(--text)" font-size="14" id="flowWt2">0 W</text></g>
+            <g><rect x="330" y="82" width="100" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--batt)" stroke-width="1.4"/>
+              <text x="348" y="106" class="flow-node-label" fill="var(--batt)" font-size="13">Battery</text>
+              <text x="348" y="126" class="flow-node-value" fill="var(--text)" font-size="14" id="flowBatt2">0%</text></g>
+            <g><rect x="540" y="82" width="90" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--load)" stroke-width="1.4"/>
+              <text x="556" y="106" class="flow-node-label" fill="var(--load)" font-size="13">Home</text>
+              <text x="556" y="126" class="flow-node-value" fill="var(--text)" font-size="14" id="flowLoad2">0 W</text></g>
+          </svg>
+        </div>
+        <p class="footnote" style="margin-top:18px;" id="flowNote">Waiting for live data…</p>
+      </div>
+    </section>
+
+    <!-- ============================================================ SOURCES -->
+    <section class="page" data-page="sources">
+      <h2 class="section-title">Power sources</h2>
+      <div class="row2">
+        <div class="card source-card solar">
+          <span class="chip">☀ Solar array</span>
+          <div class="big num" id="src-pv-power">0 W</div>
+          <div class="stat-line"><span class="k">Voltage</span><span class="v num" id="src-pv-v">0.0 V</span></div>
+          <div class="stat-line"><span class="k">Current</span><span class="v num" id="src-pv-i">0.00 A</span></div>
+          <div class="stat-line"><span class="k">Rated capacity</span><span class="v num" id="src-pv-pct">0%<span style="color:var(--text-dim); font-weight:400;"> of 400 W</span></span></div>
+          <div class="trend-mini"><svg viewBox="0 0 400 70" id="pvSparklineBig"></svg></div>
+        </div>
+        <div class="card source-card wind">
+          <span class="chip">〜 Wind turbine</span>
+          <div class="big num" id="src-wt-power">0 W</div>
+          <div class="stat-line"><span class="k">Voltage</span><span class="v num" id="src-wt-v">0.0 V</span></div>
+          <div class="stat-line"><span class="k">Current</span><span class="v num" id="src-wt-i">0.00 A</span></div>
+          <div class="stat-line"><span class="k">Rated capacity</span><span class="v num" id="src-wt-pct">0%<span style="color:var(--text-dim); font-weight:400;"> of 200 W</span></span></div>
+          <div class="trend-mini"><svg viewBox="0 0 400 70" id="wtSparklineBig"></svg></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ BATTERY -->
+    <section class="page" data-page="battery">
+      <h2 class="section-title">Battery</h2>
+      <div class="row2">
+        <div class="card" style="text-align:center;">
+          <div class="gauge-big">
+            <svg viewBox="0 0 168 168"><circle class="ring-bg" cx="84" cy="84" r="70"/><circle class="ring-fg" id="battGaugeRing" cx="84" cy="84" r="70" stroke-dasharray="439.8" stroke-dashoffset="439.8"/></svg>
+            <div class="center"><div class="pct num" id="battGaugePct">--%</div><div class="lbl">state of charge</div></div>
+          </div>
+          <div class="pill batt" id="battPill2" style="margin: 0 auto;">Idle</div>
+        </div>
+        <div class="card">
+          <p class="card-label">Details</p>
+          <div class="stat-line"><span class="k">Voltage</span><span class="v num" id="batt-v">0.0 V</span></div>
+          <div class="stat-line"><span class="k">Net flow</span><span class="v num" id="batt-i">+0.0 W</span></div>
+          <div class="stat-line"><span class="k">State</span><span class="v" id="batt-state">—</span></div>
+          <div class="trend-mini" style="margin-top:14px;"><svg viewBox="0 0 400 70" id="battSparkline"></svg></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ LOAD -->
+    <section class="page" data-page="load">
+      <h2 class="section-title">Home load</h2>
+      <div class="row2">
+        <div class="card" style="text-align:center; display:flex; flex-direction:column; justify-content:center;">
+          <p class="card-label">Current draw</p>
+          <div style="font-size:44px; font-weight:700;" class="num" id="load-big">0 W</div>
+          <div class="pill accent" id="load-source-pill" style="margin: 10px auto 0;">—</div>
+        </div>
+        <div class="card">
+          <div class="stat-line"><span class="k">AC voltage</span><span class="v num" id="load-v">0.0 V</span></div>
+          <div class="stat-line"><span class="k">AC current</span><span class="v num" id="load-a">0.000 A</span></div>
+          <div class="stat-line"><span class="k">Inverter rating</span><span class="v num">720 W</span></div>
+          <div class="stat-line"><span class="k">Load vs. rating</span><span class="v num" id="load-pct">0%</span></div>
+          <div class="trend-mini" style="margin-top:14px;"><svg viewBox="0 0 400 70" id="loadSparklineBig"></svg></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ HISTORY -->
+    <section class="page" data-page="history">
+      <div class="hist-head">
+        <h2 class="section-title" style="margin:0;">History</h2>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <div class="tabs" id="histSeriesTabs">
+            <button class="active" data-series="pv">Solar</button>
+            <button data-series="wt">Wind</button>
+            <button data-series="batt">Battery</button>
+            <button data-series="load">Load</button>
+          </div>
+          <div class="tabs" id="histRangeTabs">
+            <button class="active" data-range="1h">1H</button>
+            <button data-range="24h">24H</button>
+            <button data-range="7d">7D</button>
+          </div>
+        </div>
+      </div>
+      <div class="hist-chart-wrap">
+        <svg viewBox="0 0 900 260" id="histChart"></svg>
+      </div>
+    </section>
+
+    <!-- ============================================================ SETTINGS -->
+    <section class="page" data-page="settings">
+      <h2 class="section-title">Cloud</h2>
+      <div class="card">
+        <div class="settings-row">
+          <div><div class="k">Supabase project</div><div class="d" id="sbProject">—</div></div>
+          <div class="pill batt">● Connected</div>
+        </div>
+        <div class="settings-row">
+          <div><div class="k">Latest row time</div><div class="d"><span id="sbLatest">—</span></div></div>
+          <div class="pill accent" id="sbRows">0 rows</div>
+        </div>
+        <div class="settings-row">
+          <div><div class="k">Sync now</div><div class="d">Force a refetch of the latest row</div></div>
+          <button class="btn primary" id="syncNowBtn">Sync now</button>
+        </div>
+      </div>
+
+      <h2 class="section-title">Display</h2>
+      <div class="card">
+        <div class="settings-row">
+          <div><div class="k">Theme</div><div class="d">Dark / light appearance</div></div>
+          <select class="field" id="themeSelect">
+            <option value="dark" selected>Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+      </div>
+
+      <p class="footnote">PowerView web · firmware v1.0 · Live data pulled from Supabase Realtime.</p>
+    </section>
+
+  </main>
+</div>
+
+<!-- Supabase JS client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+(function () {
+  // ======================================================
+  // ⚠️ FILL THESE IN — same project as the ESP32 receiver
+  // ======================================================
+  const SUPABASE_URL  = 'https://hjmtjwzsjjsvztiacpeg.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqbXRqd3pzampzdnp0aWFjcGVnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4OTM5NDA4MSwiZXhwIjoyMTA0OTcwMDgxfQ.nm-ugM0OK-ZN7oy9QWm7iBbKeWZouWpPdioUwwb7qIU';
+  const TABLE         = 'energy_readings';
+
+  // ======================================================
+  // Supabase client
+  // ======================================================
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+  // ======================================================
+  // Nav
+  // ======================================================
+  var navBtns = document.querySelectorAll('.navbtn[data-page]');
+  var pages = document.querySelectorAll('.page[data-page]');
+  var titles = {
+    dashboard: ['Dashboard', 'Solar + wind + battery, at a glance'],
+    flow: ['Power Flow', 'Where your energy is going right now'],
+    sources: ['Power Sources', 'Solar array and wind turbine detail'],
+    battery: ['Battery', 'State of charge and health'],
+    load: ['Home Load', 'What the house is drawing'],
+    history: ['History', 'Trends over time'],
+    settings: ['Settings', 'Device, cloud sync and display']
+  };
+  function goTo(page) {
+    navBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.page === page); });
+    pages.forEach(function (p) { p.classList.toggle('active', p.dataset.page === page); });
+    document.getElementById('pageTitle').textContent = titles[page][0];
+    document.getElementById('pageSub').textContent = titles[page][1];
+    if (page === 'history') refreshHistory();
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+  navBtns.forEach(function (b) { b.addEventListener('click', function () { goTo(b.dataset.page); }); });
+
+  // ======================================================
+  // Theme
+  // ======================================================
+  var themeToggle = document.getElementById('themeToggle');
+  var themeSelect = document.getElementById('themeSelect');
+  function setTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    themeSelect.value = t;
+  }
+  themeToggle.addEventListener('click', function () {
+    setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+  themeSelect.addEventListener('change', function () { setTheme(this.value); });
+
+  // ======================================================
+  // Clock
+  // ======================================================
+  function tickClock() {
+    var d = new Date();
+    document.getElementById('clock').textContent =
+      String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  tickClock();
+  setInterval(tickClock, 15000);
+
+  // ======================================================
+  // In-memory history buffers (per session)
+  // ======================================================
+  var state = {
+    pvHist:   [],
+    wtHist:   [],
+    loadHist: [],
+    battHist: [],
+    maxLen:   60
+  };
+  function pushHist(arr, v) { arr.push(v); if (arr.length > state.maxLen) arr.shift(); }
+
+  // ======================================================
+  // Sparkline renderer
+  // ======================================================
+  function sparkline(svgEl, data, color) {
+    if (!svgEl) return;
+    if (!data.length) { svgEl.innerHTML = ''; return; }
+    var w = svgEl.viewBox.baseVal.width || 200, h = svgEl.viewBox.baseVal.height || 64;
+    var min = Math.min.apply(null, data), max = Math.max.apply(null, data);
+    if (min === max) { min -= 1; max += 1; }
+    var pad = 4;
+    var pts = data.map(function (v, i) {
+      var x = data.length === 1 ? w / 2 : pad + (i / (data.length - 1)) * (w - pad * 2);
+      var y = h - pad - ((v - min) / (max - min)) * (h - pad * 2);
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    var last = pts.split(' ').slice(-1)[0].split(',');
+    svgEl.innerHTML =
+      '<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="2.6" fill="' + color + '"/>';
+  }
+
+  // ======================================================
+  // Apply a Supabase row to the whole UI
+  // ======================================================
+  function applyReading(row) {
+    if (!row) return;
+
+    var pv        = Number(row.solar_power   || 0);
+    var wt        = Number(row.wind_power    || 0);
+    var load      = Number(row.load_power    || 0);
+    var battPower = Number(row.battery_power || 0);
+    var soc       = Number(row.battery_soc   || 0);
+    var charging  = battPower >= 0;
+
+    pushHist(state.pvHist,   pv);
+    pushHist(state.wtHist,   wt);
+    pushHist(state.loadHist, load);
+    pushHist(state.battHist, soc);
+
+    // Hero flow
+    document.getElementById('flowPv').textContent   = pv.toFixed(0) + ' W';
+    document.getElementById('flowWt').textContent   = wt.toFixed(0) + ' W';
+    document.getElementById('flowLoad').textContent = load.toFixed(0) + ' W';
+    document.getElementById('flowSoc').textContent  = soc.toFixed(0) + '%';
+    document.getElementById('heroNet').textContent  =
+      (battPower >= 0 ? '+' : '') + battPower.toFixed(0) + ' W';
+
+    // SOC ring (circumference = 2*pi*31 = 194.8)
+    document.getElementById('socRing').style.strokeDashoffset =
+      (194.8 * (1 - soc / 100)).toFixed(1);
+    document.getElementById('socNum').textContent = soc.toFixed(0) + '%';
+    document.getElementById('battPill').textContent = charging ? 'Charging' : 'Discharging';
+    document.getElementById('battWattMini').textContent =
+      (battPower >= 0 ? '+' : '') + battPower.toFixed(0) + ' W';
+
+    // Tiles
+    document.getElementById('pvVal').innerHTML   = pv.toFixed(0)   + '<span class="card-unit">W</span>';
+    document.getElementById('wtVal').innerHTML   = wt.toFixed(0)   + '<span class="card-unit">W</span>';
+    document.getElementById('loadVal').innerHTML = load.toFixed(0) + '<span class="card-unit">W</span>';
+    document.getElementById('loadSourceMini').textContent =
+      charging ? 'Powered by solar + wind' : 'Drawing from battery';
+
+    sparkline(document.getElementById('pvSparkline'),   state.pvHist,   '#f5b942');
+    sparkline(document.getElementById('wtSparkline'),   state.wtHist,   '#3ecfd6');
+    sparkline(document.getElementById('loadSparkline'), state.loadHist, '#f2794a');
+
+    // Sources page
+    document.getElementById('src-pv-power').textContent = pv.toFixed(0) + ' W';
+    document.getElementById('src-pv-v').textContent     = Number(row.solar_voltage || 0).toFixed(1) + ' V';
+    document.getElementById('src-pv-i').textContent     = Number(row.solar_current || 0).toFixed(2) + ' A';
+    document.getElementById('src-pv-pct').innerHTML     = (pv / 400 * 100).toFixed(0) + '%<span style="color:var(--text-dim); font-weight:400;"> of 400 W</span>';
+    document.getElementById('src-wt-power').textContent = wt.toFixed(0) + ' W';
+    document.getElementById('src-wt-v').textContent     = Number(row.wind_voltage || 0).toFixed(1) + ' V';
+    document.getElementById('src-wt-i').textContent     = Number(row.wind_current || 0).toFixed(2) + ' A';
+    document.getElementById('src-wt-pct').innerHTML     = (wt / 200 * 100).toFixed(0) + '%<span style="color:var(--text-dim); font-weight:400;"> of 200 W</span>';
+    sparkline(document.getElementById('pvSparklineBig'), state.pvHist, '#f5b942');
+    sparkline(document.getElementById('wtSparklineBig'), state.wtHist, '#3ecfd6');
+
+    // Battery page
+    document.getElementById('battGaugeRing').style.strokeDashoffset =
+      (439.8 * (1 - soc / 100)).toFixed(1);
+    document.getElementById('battGaugePct').textContent = soc.toFixed(0) + '%';
+    document.getElementById('battPill2').textContent =
+      (charging ? '⚡ Charging · ' : '▾ Discharging · ') +
+      (battPower >= 0 ? '+' : '') + battPower.toFixed(0) + ' W';
+    document.getElementById('batt-v').textContent    = Number(row.battery_voltage || 0).toFixed(1) + ' V';
+    document.getElementById('batt-i').textContent    = (battPower >= 0 ? '+' : '') + battPower.toFixed(1) + ' W';
+    document.getElementById('batt-state').textContent = charging ? 'Charging' : 'Discharging';
+    sparkline(document.getElementById('battSparkline'), state.battHist, '#4ad991');
+
+    // Load page
+    document.getElementById('load-big').textContent = load.toFixed(0) + ' W';
+    document.getElementById('load-source-pill').textContent =
+      charging ? 'Powered by solar + wind' : 'Drawing from battery';
+    document.getElementById('load-v').textContent = Number(row.home_load_voltage || 0).toFixed(1) + ' V';
+    document.getElementById('load-a').textContent = Number(row.load_current || 0).toFixed(3) + ' A';
+    document.getElementById('load-pct').textContent = (load / 720 * 100).toFixed(0) + '%';
+    sparkline(document.getElementById('loadSparklineBig'), state.loadHist, '#f2794a');
+
+    // Flow page (duplicates of dashboard hero, same values)
+    document.getElementById('flowPv2').textContent   = pv.toFixed(0) + ' W';
+    document.getElementById('flowWt2').textContent   = wt.toFixed(0) + ' W';
+    document.getElementById('flowBatt2').textContent = soc.toFixed(0) + '%';
+    document.getElementById('flowLoad2').textContent = load.toFixed(0) + ' W';
+    document.getElementById('flowNote').textContent =
+      charging
+        ? 'Generation (' + (pv + wt).toFixed(0) + ' W) exceeds demand (' + load.toFixed(0) +
+          ' W), so the surplus of ' + battPower.toFixed(0) + ' W is charging the battery.'
+        : 'Demand (' + load.toFixed(0) + ' W) exceeds generation (' + (pv + wt).toFixed(0) +
+          ' W), so the battery is supplying ' + Math.abs(battPower).toFixed(0) + ' W.';
+
+    // Sync labels
+    if (row.created_at) {
+      var d = new Date(row.created_at);
+      document.getElementById('clock').textContent =
+        String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      var secondsAgo = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+      var label = secondsAgo < 60 ? (secondsAgo + ' s ago') : (Math.round(secondsAgo / 60) + ' min ago');
+      document.getElementById('syncStatus').textContent  = 'Synced ' + label;
+      document.getElementById('syncStatus2').textContent = label;
+      document.getElementById('sbLatest').textContent    = d.toLocaleString();
+    }
+
+    // Link alive indicator
+    document.getElementById('linkDot').classList.remove('offline');
+    document.getElementById('linkLabel').textContent = 'Live';
+  }
+
+  // ======================================================
+  // Link watchdog — if no fresh row within 10s, mark offline
+  // ======================================================
+  var lastRowMs = 0;
+  setInterval(function () {
+    if (!lastRowMs) return;
+    if (Date.now() - lastRowMs > 10000) {
+      document.getElementById('linkDot').classList.add('offline');
+      document.getElementById('linkLabel').textContent = 'Stale';
+    }
+  }, 3000);
+
+  // ======================================================
+  // History fetch — pulls last N rows for the selected range
+  // ======================================================
+  var histState = { series: 'pv', range: '1h' };
+  var histCache = [];
+
+  async function refreshHistory() {
+    var now = Date.now();
+    var msBack = histState.range === '1h'  ? 60 * 60 * 1000
+               : histState.range === '24h' ? 24 * 60 * 60 * 1000
+               : 7 * 24 * 60 * 60 * 1000;
+    var sinceIso = new Date(now - msBack).toISOString();
+
+    var resp = await sb
+      .from(TABLE)
+      .select('created_at,solar_power,wind_power,battery_soc,load_power')
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: true })
+      .limit(2000);
+
+    if (resp.error) { console.error(resp.error); return; }
+    histCache = resp.data || [];
+    drawHistoryChart();
+  }
+
+  function drawHistoryChart() {
+    var svg = document.getElementById('histChart');
+    var w = 900, h = 260, padL = 40, padR = 20, padT = 20, padB = 30;
+    var seriesMeta = {
+      pv:   { key: 'solar_power', color: 'var(--solar)', label: 'Solar (W)',   max: null },
+      wt:   { key: 'wind_power',  color: 'var(--wind)',  label: 'Wind (W)',    max: null },
+      batt: { key: 'battery_soc', color: 'var(--batt)',  label: 'Battery (%)', max: 100  },
+      load: { key: 'load_power',  color: 'var(--load)',  label: 'Load (W)',    max: null }
+    };
+    var meta = seriesMeta[histState.series];
+    var values = histCache.map(function (r) { return Number(r[meta.key] || 0); });
+
+    if (!values.length) {
+      svg.innerHTML = '<text x="' + (w / 2) + '" y="' + (h / 2) +
+        '" text-anchor="middle" font-size="14" fill="var(--text-faint)">No data in this range yet</text>';
+      return;
+    }
+
+    var maxVal = meta.max != null ? meta.max : Math.max.apply(null, values) * 1.15;
+    if (maxVal <= 0) maxVal = 1;
+
+    var innerW = w - padL - padR, innerH = h - padT - padB;
+
+    var gridLines = '', yLabels = '';
+    for (var g = 0; g <= 3; g++) {
+      var y = padT + (innerH / 3) * g;
+      gridLines += '<line x1="' + padL + '" y1="' + y + '" x2="' + (w - padR) + '" y2="' + y + '" stroke="var(--border)" stroke-width="1"/>';
+      var val = Math.round(maxVal - (maxVal / 3) * g);
+      yLabels += '<text x="' + (padL - 10) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="var(--text-faint)" font-family=\'IBM Plex Mono, monospace\'>' + val + '</text>';
+    }
+
+    var pts = values.map(function (v, i) {
+      var x = padL + (values.length === 1 ? 0.5 : (i / (values.length - 1))) * innerW;
+      var y = padT + innerH - (v / maxVal) * innerH;
+      return { x: x, y: y, v: v };
+    });
+    var polyline = pts.map(function (p) { return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
+    var areaPath = 'M' + pts[0].x + ',' + (padT + innerH) + ' ' +
+      pts.map(function (p) { return 'L' + p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ') +
+      ' L' + pts[pts.length - 1].x + ',' + (padT + innerH) + ' Z';
+
+    var xLabel = histState.range === '1h' ? ['-1h', 'now']
+               : histState.range === '24h' ? ['-24h', 'now']
+               : ['-7d', 'now'];
+
+    svg.innerHTML =
+      '<defs><linearGradient id="histFill" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="' + meta.color + '" stop-opacity="0.28"/>' +
+        '<stop offset="100%" stop-color="' + meta.color + '" stop-opacity="0"/>' +
+      '</linearGradient></defs>' +
+      gridLines + yLabels +
+      '<path d="' + areaPath + '" fill="url(#histFill)"/>' +
+      '<polyline points="' + polyline + '" fill="none" stroke="' + meta.color +
+        '" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<text x="' + padL + '" y="' + (h - 6) + '" font-size="11" fill="var(--text-faint)">' + xLabel[0] + '</text>' +
+      '<text x="' + (w - padR) + '" y="' + (h - 6) + '" text-anchor="end" font-size="11" fill="var(--text-faint)">' + xLabel[1] + '</text>' +
+      '<text x="' + padL + '" y="14" font-size="12" fill="' + meta.color + '" font-weight="600">' + meta.label + '</text>';
+  }
+
+  document.querySelectorAll('#histSeriesTabs button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#histSeriesTabs button').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      histState.series = btn.dataset.series;
+      drawHistoryChart();
+    });
+  });
+  document.querySelectorAll('#histRangeTabs button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#histRangeTabs button').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      histState.range = btn.dataset.range;
+      refreshHistory();
+    });
+  });
+
+  // ======================================================
+  // Settings — Sync Now
+  // ======================================================
+  document.getElementById('syncNowBtn').addEventListener('click', async function () {
+    await initialFetch();
+    document.getElementById('sbLatest').textContent = new Date().toLocaleString();
+  });
+
+  // ======================================================
+  // Bootstrap: initial fetch + realtime subscription
+  // ======================================================
+  document.getElementById('sbProject').textContent = SUPABASE_URL;
+
+  async function initialFetch() {
+    var resp = await sb
+      .from(TABLE)
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (resp.error) {
+      console.error('Fetch error:', resp.error);
+      document.getElementById('syncStatus').textContent = 'Fetch failed';
+      return;
+    }
+    if (resp.data && resp.data.length) {
+      lastRowMs = Date.now();
+      applyReading(resp.data[0]);
+      document.getElementById('sbRows').textContent = resp.data.length + ' row(s)';
+    } else {
+      document.getElementById('syncStatus').textContent = 'No data yet';
+    }
+  }
+
+  initialFetch();
+
+  // Realtime: fires on every INSERT into energy_readings
+  sb.channel('energy-live')
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: TABLE },
+      function (payload) {
+        lastRowMs = Date.now();
+        applyReading(payload.new);
+      }
+    )
+    .subscribe(function (status) {
+      console.log('Realtime status:', status);
+      if (status === 'SUBSCRIBED') {
+        document.getElementById('linkLabel').textContent = 'Live';
+      }
+    });
+
+  // Re-draw history when resized on the history page
+  window.addEventListener('resize', function () {
+    if (document.querySelector('.page[data-page="history"]').classList.contains('active')) {
+      drawHistoryChart();
+    }
+  });
+})();
+</script>
+</body>
+</html>
